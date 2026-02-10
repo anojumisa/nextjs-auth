@@ -1,3 +1,4 @@
+'use server'
 import { redirect } from "next/navigation";
 import { AuthResponse, LoginFormState, User } from "../lib/definitions";
 import { createSession, deleteSession } from "../lib/session";
@@ -8,6 +9,7 @@ function isValidEmail(email: string): boolean {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// butuh client component
 export async function login(state: LoginFormState, formData: FormData) {
 	const email = formData.get("email") as string;
 	const password = formData.get("password") as string;
@@ -67,6 +69,7 @@ export async function login(state: LoginFormState, formData: FormData) {
 	}
 }
 
+// butuh server components 'use server'
 export async function logout() {
     await deleteSession();
     redirect("/login");
