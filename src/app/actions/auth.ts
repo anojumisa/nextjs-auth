@@ -1,3 +1,4 @@
+'use server'
 import { redirect } from "next/navigation";
 import { AuthResponse, LoginFormState, User } from "../lib/definitions";
 import { createSession, deleteSession } from "../lib/session";
@@ -58,16 +59,16 @@ export async function login(state: LoginFormState, formData: FormData) {
 		const user: User = await profileResponse.json();
 
 		await createSession(user.id, user.email, user.role);
-		redirect("/dashboard");
 	} catch (error) {
 		console.error("Login error:", error);
 		return {
 			message: "An error occurred during login. Please try again.",
 		};
 	}
+	redirect("/dashboard");
 }
 
 export async function logout() {
-    await deleteSession();
-    redirect("/login");
+	await deleteSession();
+	redirect("/login");
 }
