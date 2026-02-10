@@ -28,7 +28,7 @@ A beginner-friendly step-by-step guide to implementing authentication and Role-B
 8. [Create Protected Dashboard Page](#step-8-create-protected-dashboard-page)
 9. [Implement RBAC - Admin Page](#step-9-implement-rbac---admin-page)
 10. [Create Logout Functionality](#step-10-create-logout-functionality)
-11. [Add Route Protection with Proxy](#step-11-add-route-protection-with-proxy)
+11. [Add Route Protection with Middleware](#step-11-add-route-protection-with-middleware)
 12. [Update Home Page](#step-12-update-home-page)
 
 ---
@@ -686,39 +686,38 @@ export default function LogoutButton() {
 
 ---
 
-## Step 11: Add Route Protection with Proxy
+## Step 11: Add Route Protection with Middleware
 
-Use Next.js Proxy to protect routes at the edge.
+Use Next.js **Middleware** to protect routes at the edge. Next.js only runs a file named `middleware.ts` (at the project root or in `src/`); any other filename (e.g. `proxy.ts`) is **not** executed automatically.
 
 ### 📝 Instructions:
 
-1. Create a file: `src/proxy.ts` (in the `src` directory, not `app`)
+1. Create a file: `middleware.ts` at the **project root** (same level as `next.config.ts`, not inside `src/app`).
 2. Add the following code:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 // Define protected routes
 const protectedRoutes = ["/dashboard", "/admin"];
 const publicRoutes = ["/login", "/"];
 
-export default async function proxy(req: NextRequest) {
+export default async function middleware(req: NextRequest) {
 	const path = req.nextUrl.pathname;
 	const isProtectedRoute = protectedRoutes.some((route) =>
 		path.startsWith(route),
 	);
 	const isPublicRoute = publicRoutes.includes(path);
 
-	// Get session from cookie
-	const cookie = (await cookies()).get("session")?.value;
-	let session = null;
+	// Get session from request cookies (Edge runtime: use req.cookies, not cookies() from next/headers)
+	const cookie = req.cookies.get("session")?.value;
+	let session: { userId?: number; role?: string; expiresAt?: string } | null =
+		null;
 
 	if (cookie) {
 		try {
 			session = JSON.parse(cookie);
-			// Check if expired
-			if (new Date(session.expiresAt) < new Date()) {
+			if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
 				session = null;
 			}
 		} catch {
@@ -746,7 +745,7 @@ export default async function proxy(req: NextRequest) {
 	return NextResponse.next();
 }
 
-// Configure which routes the proxy should run on
+// Configure which routes the middleware runs on
 export const config = {
 	matcher: ["/((?!api|_next/static|_next/image|.*\\.png$).*)"],
 };
@@ -754,14 +753,17 @@ export const config = {
 
 **What this code does:**
 
-- Protects routes before they're accessed
-- Redirects unauthenticated users to login
-- Redirects authenticated users away from login
-- Enforces admin-only access
+- Runs on every matching request before the page is rendered.
+- Protects routes before they're accessed.
+- Redirects unauthenticated users to login.
+- Redirects authenticated users away from the login page.
+- Enforces admin-only access for `/admin`.
+
+**Why `middleware.ts` and not `proxy.ts`?** Next.js looks for a file named exactly `middleware.ts` to run this logic. A file named `proxy.ts` is never executed by the framework.
 
 ### ✅ Checklist:
 
-- [ ] File created at `src/proxy.ts`
+- [ ] File created at `middleware.ts` (project root)
 - [ ] Route protection logic implemented
 - [ ] Admin route protection added
 
@@ -897,7 +899,7 @@ export default async function HomePage() {
 
 **Solution:**
 
-- Check `proxy.ts` logic
+- Check `middleware.ts` logic
 - Verify session is being created correctly
 - Check cookie settings
 - Clear browser cookies and try again
@@ -908,7 +910,7 @@ export default async function HomePage() {
 
 - Verify `requireRole` function is called
 - Check user role in session
-- Verify proxy.ts admin check
+- Verify `middleware.ts` admin check
 - Check browser DevTools > Application > Cookies to see session data
 
 ### Issue: Session not persisting
