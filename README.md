@@ -30,6 +30,7 @@ A beginner-friendly step-by-step guide to implementing authentication and Role-B
 10. [Create Logout Functionality](#step-10-create-logout-functionality)
 11. [Add Route Protection with Proxy](#step-11-add-route-protection-with-proxy)
 12. [Update Home Page](#step-12-update-home-page)
+13. [Adding New Protected Routes (RBAC Strategy)](#step-13-adding-new-protected-routes-rbac-strategy)
 
 ---
 
@@ -812,6 +813,271 @@ export default async function HomePage() {
 - [ ] Home page updated
 - [ ] Redirects authenticated users
 - [ ] Shows login link for unauthenticated users
+
+---
+
+## Step 13: Adding New Protected Routes (RBAC Strategy)
+
+When creating new protected pages in the future, you need to implement **two-layer protection**:
+
+1. **Edge Protection** (`proxy.ts`): First line of defense - redirects unauthenticated users before the page loads
+2. **Page-level Protection** (DAL functions): Second line of defense - server-side checks in your page component
+
+### 📝 Two-Layer Protection Strategy
+
+#### Layer 1: Edge Protection (`proxy.ts`)
+
+Add your route to the `protectedRoutes` array in `proxy.ts` to redirect unauthenticated users before the page loads.
+
+#### Layer 2: Page-level Protection (DAL Functions)
+
+Use `verifySession()` or `requireRole()` in your page component for server-side checks.
+
+### 📋 Examples for Different Scenarios
+
+#### Scenario 1: Protected Page (Any Authenticated User)
+
+**Example:** `/profile` page
+
+1. **Update `proxy.ts`:**
+```typescript
+const protectedRoutes = ["/dashboard", "/admin", "/profile"];
+```
+
+2. **Create the page** (`src/app/profile/page.tsx`):
+```typescript
+import { verifySession, getUser } from "@/app/lib/dal";
+
+export default async function ProfilePage() {
+  // Redirects to /login if not authenticated
+  const session = await verifySession();
+  const user = await getUser();
+
+  return (
+    <div className="min-h-screen p-8">
+      <h1>Profile Page</h1>
+      <p>Welcome, {user?.name}!</p>
+      {/* Your profile content */}
+    </div>
+  );
+}
+```
+
+#### Scenario 2: Role-Specific Page (Single Role)
+
+**Example:** `/moderator` page (moderator-only)
+
+1. **Update `proxy.ts`:**
+```typescript
+const protectedRoutes = ["/dashboard", "/admin", "/profile", "/moderator"];
+
+// Add role check in proxy.ts
+if (path.startsWith("/moderator") && session?.role !== "moderator") {
+  return NextResponse.redirect(new URL("/dashboard", req.url));
+}
+```
+
+2. **Create the page** (`src/app/moderator/page.tsx`):
+```typescript
+import { requireRole } from "@/app/lib/dal";
+
+export default async function ModeratorPage() {
+  // Redirects non-moderator users to /dashboard
+  const session = await requireRole(["moderator"]);
+
+  return (
+    <div className="min-h-screen p-8">
+      <h1>Moderator Panel</h1>
+      <p>Only moderators can see this.</p>
+    </div>
+  );
+}
+```
+
+#### Scenario 3: Multiple Roles Allowed
+
+**Example:** `/editor` page (admin OR editor)
+
+1. **Update `proxy.ts`:**
+```typescript
+const protectedRoutes = ["/dashboard", "/admin", "/profile", "/moderator", "/editor"];
+
+// Add role check in proxy.ts
+if (path.startsWith("/editor") && !["admin", "editor"].includes(session?.role || "")) {
+  return NextResponse.redirect(new URL("/dashboard", req.url));
+}
+```
+
+2. **Create the page** (`src/app/editor/page.tsx`):
+```typescript
+import { requireRole } from "@/app/lib/dal";
+
+export default async function EditorPage() {
+  // Allows both admin and editor roles
+  const session = await requireRole(["admin", "editor"]);
+
+  return (
+    <div className="min-h-screen p-8">
+      <h1>Editor Panel</h1>
+      <p>Welcome, {session.email}!</p>
+    </div>
+  );
+}
+```
+
+#### Scenario 4: Nested Routes
+
+**Example:** `/settings/account` and `/settings/billing`
+
+1. **Update `proxy.ts`:**
+```typescript
+const protectedRoutes = [
+  "/dashboard", 
+  "/admin", 
+  "/profile", 
+  "/moderator", 
+  "/editor",
+  "/settings"  // This protects all /settings/* routes
+];
+```
+
+2. **Create nested pages:**
+
+`src/app/settings/account/page.tsx`:
+```typescript
+import { verifySession } from "@/app/lib/dal";
+
+export default async function AccountSettingsPage() {
+  const session = await verifySession();
+  
+  return (
+    <div>
+      <h1>Account Settings</h1>
+      {/* Settings content */}
+    </div>
+  );
+}
+```
+
+`src/app/settings/billing/page.tsx`:
+```typescript
+import { requireRole } from "@/app/lib/dal";
+
+export default async function BillingSettingsPage() {
+  // Only admin can access billing settings
+  const session = await requireRole(["admin"]);
+  
+  return (
+    <div>
+      <h1>Billing Settings</h1>
+      {/* Billing content */}
+    </div>
+  );
+}
+```
+
+### 📊 Quick Reference Guide
+
+| Page Type | Proxy.ts | Page Component |
+|-----------|----------|----------------|
+| **Any authenticated user** | Add to `protectedRoutes` | Use `verifySession()` |
+| **Single role only** | Add to `protectedRoutes` + role check | Use `requireRole(["role"])` |
+| **Multiple roles** | Add to `protectedRoutes` + role check | Use `requireRole(["role1", "role2"])` |
+| **Nested routes** | Add parent route to `protectedRoutes` | Use appropriate DAL function in each page |
+
+### ✅ Best Practices
+
+1. **Always update both layers**: Update `proxy.ts` for edge protection AND add page-level checks for security
+2. **Use `verifySession()`** for general authentication checks
+3. **Use `requireRole()`** for role-specific pages
+4. **Keep role checks in sync**: When adding role restrictions, update both `proxy.ts` AND the page component
+
+### 🔧 Advanced: Scalable Proxy Configuration
+
+For better maintainability as you add more routes, you can use a more scalable approach in `proxy.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+
+// Define protected routes
+const protectedRoutes = [
+  "/dashboard", 
+  "/admin", 
+  "/profile",
+  "/moderator",
+  "/editor",
+  "/settings"
+];
+const publicRoutes = ["/login", "/"];
+
+// Define role-specific routes
+const roleRoutes: Record<string, string[]> = {
+  "/admin": ["admin"],
+  "/moderator": ["moderator"],
+  "/editor": ["admin", "editor"],
+};
+
+export default async function proxy(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    path.startsWith(route),
+  );
+  const isPublicRoute = publicRoutes.includes(path);
+
+  // Get session from request cookies
+  const cookie = req.cookies.get("session")?.value;
+  let session: { userId?: number; role?: string; expiresAt?: string } | null =
+    null;
+
+  if (cookie) {
+    try {
+      session = JSON.parse(cookie);
+      if (session && session.expiresAt && new Date(session.expiresAt) < new Date()) {
+        session = null;
+      }
+    } catch {
+      session = null;
+    }
+  }
+
+  // Redirect to login if accessing protected route without session
+  if (isProtectedRoute && !session?.userId) {
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("redirect", path);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Redirect authenticated users away from login page
+  if (isPublicRoute && path === "/login" && session?.userId) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  // Check role-based access for specific routes
+  for (const [route, allowedRoles] of Object.entries(roleRoutes)) {
+    if (path.startsWith(route)) {
+      if (!session?.role || !allowedRoles.includes(session.role)) {
+        return NextResponse.redirect(new URL("/dashboard", req.url));
+      }
+    }
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/((?!api|_next/static|_next/image|.*\\.png$).*)"],
+};
+```
+
+This approach scales better as you add more protected pages and makes role management easier.
+
+### ✅ Checklist:
+
+- [ ] Understand two-layer protection strategy
+- [ ] Know when to use `verifySession()` vs `requireRole()`
+- [ ] Can add new protected routes following the examples
+- [ ] Updated `proxy.ts` with new routes
+- [ ] Added appropriate DAL function calls in page components
 
 ---
 
