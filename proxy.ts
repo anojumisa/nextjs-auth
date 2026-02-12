@@ -19,7 +19,7 @@ export default async function proxy(req: NextRequest) {
 	if (cookie) {
 		try {
 			session = JSON.parse(cookie);
-			if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+			if (session && session.expiresAt && new Date(session.expiresAt) < new Date()) {
 				session = null;
 			}
 		} catch {
