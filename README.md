@@ -15,6 +15,7 @@ A beginner-friendly step-by-step guide to implementing authentication and Role-B
 - Basic knowledge of React and Next.js
 - Node.js installed on your machine
 - Understanding of HTTP requests and responses
+- Familiarity with testing concepts (optional, but helpful)
 
 ## 📋 Table of Contents
 
@@ -31,6 +32,8 @@ A beginner-friendly step-by-step guide to implementing authentication and Role-B
 11. [Add Route Protection with Proxy](#step-11-add-route-protection-with-proxy)
 12. [Update Home Page](#step-12-update-home-page)
 13. [Adding New Protected Routes (RBAC Strategy)](#step-13-adding-new-protected-routes-rbac-strategy)
+14. [Testing Your Implementation](#testing-your-implementation)
+15. [Automated Testing Setup](#automated-testing-setup)
 
 ---
 
@@ -40,11 +43,13 @@ A beginner-friendly step-by-step guide to implementing authentication and Role-B
 
 - [ ] Make sure you have Node.js installed
 - [ ] Navigate to your project directory
+- [ ] Install dependencies: `npm install`
 - [ ] Verify Next.js is running: `npm run dev`
+- [ ] Run tests to verify setup: `npm test`
 
 **What we're doing:** We're setting up the foundation for our authentication system.
 
-**Note:** This tutorial uses only built-in Next.js features - no external dependencies needed!
+**Note:** This tutorial uses only built-in Next.js features for authentication - no external dependencies needed! Testing dependencies are included for automated testing.
 
 ---
 
@@ -1083,7 +1088,7 @@ This approach scales better as you add more protected pages and makes role manag
 
 ## 🧪 Testing Your Implementation
 
-### Test Checklist:
+### Manual Testing Checklist:
 
 1. **Test Login Flow:**
    - [ ] Go to `/login`
@@ -1114,6 +1119,158 @@ This approach scales better as you add more protected pages and makes role manag
    - [ ] Should remain logged in
    - [ ] Close browser and reopen
    - [ ] Should still be logged in (cookie persists)
+
+---
+
+## 🧪 Automated Testing Setup
+
+This project includes a comprehensive testing setup using Jest and React Testing Library.
+
+### Test Configuration
+
+The project uses:
+- **Jest** - Test runner
+- **React Testing Library** - Component testing utilities
+- **MSW (Mock Service Worker)** - API mocking
+- **jsdom** - Browser environment simulation
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode (re-runs on file changes)
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
+### Test Structure
+
+Tests are located in `src/__tests__/` directory:
+- `src/__tests__/lib/` - Utility function tests
+- `src/__tests__/ui/` - Component tests
+- `src/__tests__/mocks/` - MSW handlers and server setup
+
+### Writing Tests
+
+#### Example: Testing Utility Functions
+
+```typescript
+import { isValidEmail, formatUserName } from '@/app/lib/utils'
+
+describe('isValidEmail', () => {
+  it('should return true for valid email addresses', () => {
+    expect(isValidEmail('test@example.com')).toBe(true)
+  })
+
+  it('should return false for invalid email addresses', () => {
+    expect(isValidEmail('invalid')).toBe(false)
+  })
+})
+```
+
+#### Example: Testing React Components
+
+```typescript
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import LoginForm from '@/app/ui/login-form'
+
+describe('LoginForm', () => {
+  it('should render all form elements', () => {
+    render(<LoginForm />)
+    
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument()
+  })
+})
+```
+
+### API Mocking with MSW
+
+The project uses MSW to mock API calls during testing. Mock handlers are defined in `src/__tests__/mocks/handlers.ts`:
+
+```typescript
+import { http, HttpResponse } from 'msw'
+
+export const handlers = [
+  http.post('https://api.escuelajs.co/api/v1/auth/login', async ({ request }) => {
+    const body = await request.json()
+    // Return mock response
+    return HttpResponse.json({ access_token: 'mock-token' })
+  }),
+]
+```
+
+### Test Coverage
+
+The project has coverage thresholds configured:
+- **Lines**: 80%
+- **Statements**: 80%
+- **Branches**: 70%
+- **Functions**: 70%
+
+Run `npm run test:coverage` to see detailed coverage reports.
+
+### Test Files
+
+- `jest.config.js` - Jest configuration
+- `jest.setup.js` - Test environment setup (polyfills, MSW initialization)
+- `babel.config.js` - Babel configuration for ES module transformation
+
+### Common Testing Patterns
+
+#### Testing Server Actions
+
+```typescript
+// Mock the server action
+const mockLogin = jest.fn()
+jest.mock('@/app/actions/auth', () => ({
+  login: (...args: any[]) => mockLogin(...args),
+}))
+
+// In your test
+mockLogin.mockResolvedValueOnce({
+  errors: { email: 'Invalid email' }
+})
+```
+
+#### Testing Form Submissions
+
+```typescript
+import { fireEvent } from '@testing-library/react'
+
+const form = container.querySelector('form')
+fireEvent.submit(form!)
+```
+
+#### Testing Async Behavior
+
+```typescript
+import { waitFor } from '@testing-library/react'
+
+await waitFor(() => {
+  expect(screen.getByText(/error message/i)).toBeInTheDocument()
+}, { timeout: 3000 })
+```
+
+### Troubleshooting Tests
+
+**Issue: Tests fail with "ReadableStream is not defined"**
+- Solution: Already handled in `jest.setup.js` with polyfills
+
+**Issue: Tests fail with ES module errors**
+- Solution: `babel.config.js` handles ES module transformation
+
+**Issue: Server actions not being called in tests**
+- Solution: Use `fireEvent.submit()` instead of clicking submit button directly
+
+**Issue: Watchman permission errors**
+- Solution: Watchman is disabled in `jest.config.js` (`watchman: false`)
 
 ---
 
@@ -1196,6 +1353,55 @@ This approach scales better as you add more protected pages and makes role manag
 - [Platzi Fake API Documentation](https://fakeapi.platzi.com/en/rest/auth-jwt/)
 - [Next.js Server Actions](https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations)
 - [Next.js Cookies API](https://nextjs.org/docs/app/api-reference/functions/cookies)
+- [Jest Documentation](https://jestjs.io/docs/getting-started)
+- [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/)
+- [MSW (Mock Service Worker)](https://mswjs.io/docs/)
+
+---
+
+## 🚀 Quick Reference
+
+### Available npm Scripts
+
+```bash
+# Development
+npm run dev          # Start development server
+npm run build        # Build for production
+npm start            # Start production server
+
+# Testing
+npm test             # Run all tests
+npm run test:watch   # Run tests in watch mode
+npm run test:coverage # Run tests with coverage report
+```
+
+### Project Structure
+
+```
+nextjs-auth/
+├── src/
+│   ├── app/
+│   │   ├── actions/        # Server actions
+│   │   ├── lib/            # Utilities and helpers
+│   │   ├── ui/             # Reusable components
+│   │   ├── login/          # Login page
+│   │   ├── dashboard/      # Dashboard page
+│   │   └── admin/          # Admin page
+│   └── __tests__/          # Test files
+│       ├── lib/            # Utility tests
+│       ├── ui/             # Component tests
+│       └── mocks/          # MSW handlers
+├── jest.config.js          # Jest configuration
+├── jest.setup.js           # Test setup file
+├── babel.config.js         # Babel configuration
+├── next.config.ts          # Next.js configuration
+└── proxy.ts                # Route protection proxy
+```
+
+### Test Credentials
+
+- **Email**: `john@mail.com`
+- **Password**: `changeme`
 
 ---
 
